@@ -87,13 +87,30 @@ nvidia-smi
 
 ## Bolt Config
 
+The `iommu` bolt policy requires IOMMU validation before authorizing the device. If a udev rule
+(`/etc/udev/rules.d/10-thunderbolt-power.rules`) fails to set `domain0/power/control`, the IOMMU
+check stalls and the device stays at `authorized = 0` — even when powered on before boot. Symptoms:
+`boltctl list` shows `policy: iommu` and `authflags: none`, sysfs `authorized` remains `0`.
+
+Fix: re-enroll with `auto` policy so boltd authorizes immediately on connect without IOMMU gating:
+
 ```bash
-# If iommu policy causes issues, re-enroll with auto
 sudo boltctl forget e9010000-0080-7518-a3db-e281d4357001
 sudo boltctl enroll --policy auto e9010000-0080-7518-a3db-e281d4357001
 ```
 
+**Diagnosis command:**
+```bash
+boltctl list   # look for "policy: iommu" + "authflags: none" = broken auto-auth
+```
+
+**Note on egpu-fix.sh authorization step:** After switching to `auto` policy, boltd authorizes
+the device immediately on replug — before the script reaches the `authorized` sysfs write.
+Writing `1` to an already-`1` TB `authorized` file returns `EINVAL`. This error is harmless;
+the device is already authorized. The script exits there but the GPU is already functional —
+verify with `nvidia-smi` before assuming failure.
+
 ## Prevention
 
-**Power on the Razer Core X and connect TB cable BEFORE booting the laptop.**
-This ensures the bridge enumerates a live PCIe link on boot.
+**Power on the Razer Core X and connect TB cable BEFORE booting the laptop, AND ensure bolt
+policy is `auto` (not `iommu`).** Both conditions are required for clean boot-time enumeration.

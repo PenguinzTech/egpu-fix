@@ -120,8 +120,14 @@ authorize_thunderbolt() {
     info "Step 4: Authorizing Thunderbolt device..."
 
     if [[ -e "${TB_DEVICE_PATH}/authorized" ]]; then
-        echo 1 > "${TB_DEVICE_PATH}/authorized"
-        ok "Authorized via sysfs (${TB_DEVICE_PATH}/authorized)"
+        local current_auth
+        current_auth=$(cat "${TB_DEVICE_PATH}/authorized" 2>/dev/null || echo "0")
+        if [[ "$current_auth" == "1" ]]; then
+            ok "Already authorized (boltd with auto policy beat us to it)"
+        else
+            echo 1 > "${TB_DEVICE_PATH}/authorized"
+            ok "Authorized via sysfs (${TB_DEVICE_PATH}/authorized)"
+        fi
     elif command -v boltctl &>/dev/null; then
         boltctl authorize "$TB_UUID" 2>/dev/null && ok "Authorized via boltctl" || \
             warn "boltctl authorize returned non-zero — may already be authorized"
